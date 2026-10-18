@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restaurant Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  @property --h { syntax: '<number>'; inherits: true; initial-value: 265; }
+
+  :root {
+    --h: 265;
+    --a: hsl(var(--h) 95% 62%);
+    --b: hsl(calc(var(--h) + 60) 95% 60%);
+    --c: hsl(calc(var(--h) + 150) 95% 58%);
+    --ink: #f4f3ff;
+    --muted: rgba(244, 243, 255, .68);
+    --glass: rgba(255, 255, 255, .07);
+    --glass-edge: rgba(255, 255, 255, .18);
+    --bg: #0a0820;
+    transition: --h 1s ease;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    font-family: "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    overflow-x: hidden;
+  }
+
+  /* ---------- Fluid aurora background ---------- */
+  .aurora { position: fixed; inset: 0; z-index: -1; overflow: hidden; filter: blur(70px) saturate(1.3); }
+  .blob {
+    position: absolute; border-radius: 50%; opacity: .55;
+    width: 55vmax; height: 55vmax;
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  .blob.one   { background: var(--a); top: -20vmax; left: -15vmax; }
+  .blob.two   { background: var(--b); bottom: -25vmax; right: -15vmax; animation-duration: 28s; animation-delay: -6s; }
+  .blob.three { background: var(--c); top: 30%; left: 35%; width: 36vmax; height: 36vmax; opacity: .38; animation-duration: 18s; animation-delay: -10s; }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+    50%  { transform: translate(8vmax, 5vmax) scale(1.15) rotate(40deg); }
+    100% { transform: translate(-6vmax, 9vmax) scale(.92) rotate(-30deg); }
+  }
+
+  .grid-floor {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .35;
+    background-image:
+      linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+  }
+
+  /* ---------- Glass card ---------- */
+  .card {
+    --mx: 50%; --my: 0%;
+    position: relative;
+    width: min(100%, 560px);
+    padding: 2.5rem 2rem 2rem;
+    border-radius: 32px;
+    background: var(--glass);
+    border: 1px solid var(--glass-edge);
+    backdrop-filter: blur(26px) saturate(1.6);
+    -webkit-backdrop-filter: blur(26px) saturate(1.6);
+    box-shadow: 0 30px 80px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.2);
+    text-align: center;
+    overflow: hidden;
+    animation: rise .9s cubic-bezier(.2,.9,.2,1) both;
+  }
+  .card::before {            /* cursor-following glow */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(360px circle at var(--mx) var(--my), hsl(var(--h) 100% 70% / .22), transparent 60%);
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(28px) scale(.97); } }
+
+  h1 {
+    margin: 0 0 .75rem;
+    font-family: "Unbounded", "Outfit", system-ui, sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.9rem, 6vw, 2.6rem);
+    line-height: 1.05;
+    letter-spacing: -.02em;
+    background: linear-gradient(100deg, #fff 10%, var(--a) 45%, var(--b) 70%, var(--c));
+    background-size: 220% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 8s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: -220% 0; } }
+
+  .lede { margin: 0 auto 1.5rem; max-width: 42ch; color: var(--muted); line-height: 1.55; }
+
+  /* ---------- Category chips ---------- */
+  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: .55rem; margin-bottom: 1.75rem; }
+  .chip {
+    font: inherit; font-weight: 500; font-size: .95rem;
+    color: var(--ink);
+    padding: .55rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--glass-edge);
+    background: rgba(255,255,255,.05);
+    cursor: pointer;
+    transition: transform .25s cubic-bezier(.3,1.6,.5,1), background .3s, border-color .3s, box-shadow .3s;
+  }
+  .chip:hover { transform: translateY(-3px) scale(1.05); background: rgba(255,255,255,.12); }
+  .chip[aria-pressed="true"] {
+    background: linear-gradient(120deg, var(--a), var(--b));
+    border-color: transparent;
+    box-shadow: 0 8px 28px hsl(var(--h) 95% 55% / .5);
+    transform: translateY(-2px);
+  }
+
+  /* ---------- Radar + main button ---------- */
+  .stage { position: relative; display: grid; place-items: center; height: 190px; margin-bottom: .5rem; }
+  .radar { position: absolute; width: 190px; height: 190px; pointer-events: none; }
+  .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid var(--a); opacity: 0;
+  }
+  .stage[data-state="scanning"] .ring { animation: ping 2.1s cubic-bezier(.2,.6,.3,1) infinite; }
+  .stage[data-state="scanning"] .ring:nth-child(2) { animation-delay: .7s; border-color: var(--b); }
+  .stage[data-state="scanning"] .ring:nth-child(3) { animation-delay: 1.4s; border-color: var(--c); }
+  @keyframes ping { 0% { transform: scale(.35); opacity: .9; } 100% { transform: scale(1.25); opacity: 0; } }
+
+  .stage[data-state="found"] .ring { animation: lock 1.2s ease-out 1 forwards; }
+  @keyframes lock { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+
+  .go {
+    position: relative; z-index: 1;
+    width: 128px; height: 128px; border-radius: 50%;
+    border: 0; cursor: pointer; color: #fff;
+    font: 600 .95rem/1.2 "Outfit", system-ui, sans-serif;
+    background: conic-gradient(from var(--spin, 0deg), var(--a), var(--b), var(--c), var(--a));
+    box-shadow: 0 0 0 6px rgba(255,255,255,.06), 0 18px 50px hsl(var(--h) 95% 50% / .55);
+    transition: transform .25s cubic-bezier(.3,1.6,.5,1), box-shadow .3s;
+    animation: spin 6s linear infinite;
+  }
+  @property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  @keyframes spin { to { --spin: 360deg; } }
+  .go::after {               /* inner disc */
+    content: attr(data-label); position: absolute; inset: 6px; border-radius: 50%;
+    display: grid; place-items: center; padding: .5rem;
+    background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.18), rgba(10,8,32,.82) 70%);
+  }
+  .go:hover { transform: scale(1.07); }
+  .go:active { transform: scale(.96); }
+  .go:disabled { cursor: progress; }
+
+  /* ---------- Status + results ---------- */
+  #status { min-height: 1.6em; margin: .5rem 0 0; font-weight: 500; color: var(--muted); transition: color .3s; }
+  #status.ok { color: #7dffc4; }
+  #status.err { color: #ff8fa8; }
+
+  .coords {
+    display: inline-flex; gap: .75rem; margin-top: .75rem;
+    padding: .45rem .9rem; border-radius: 999px;
+    background: rgba(255,255,255,.06); border: 1px solid var(--glass-edge);
+    font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--muted);
+  }
+
+  .actions { display: grid; gap: .75rem; justify-items: center; margin-top: 1.25rem; }
+  .actions[hidden] { display: none; }
+  .actions:not([hidden]) { animation: pop .6s cubic-bezier(.3,1.5,.5,1) both; }
+  @keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.9); } }
+
+  .action-btn {
+    --tx: 0px; --ty: 0px;
+    display: inline-flex; align-items: center; gap: .6rem;
+    text-decoration: none; color: #0a0820; font-weight: 600; font-size: 1.05rem;
+    padding: .95rem 1.6rem; border-radius: 16px;
+    background: linear-gradient(120deg, #7dffc4, #6ee7ff 55%, #b6a4ff);
+    box-shadow: 0 14px 40px rgba(110, 231, 255, .35);
+    transform: translate(var(--tx), var(--ty));
+    transition: transform .2s ease-out, box-shadow .3s;
+  }
+  .action-btn:hover { box-shadow: 0 18px 54px rgba(110, 231, 255, .55); }
+
+  .fallback {
+    background: none; border: 0; padding: .25rem; cursor: pointer;
+    font: inherit; font-size: .9rem; color: var(--muted); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .fallback:hover { color: var(--ink); }
+
+
+  /* ---------- In-app results ---------- */
+  .card { max-width: 560px; transition: max-width .8s cubic-bezier(.2,.8,.2,1); }
+  .card.wide { max-width: 1040px; }
+  .stage { transition: height .6s cubic-bezier(.2,.8,.2,1); }
+  .stage.compact { height: 84px; }
+  .stage.compact .radar { width: 84px; height: 84px; }
+  .stage.compact .go { width: 60px; height: 60px; font-size: 1.4rem; }
+  .go, .radar { transition: width .6s, height .6s, transform .25s cubic-bezier(.3,1.6,.5,1), box-shadow .3s; }
+
+  .results { display: none; margin-top: 1.5rem; text-align: left; gap: 1rem; grid-template-columns: 1fr; }
+  .results.show { display: grid; animation: pop .7s cubic-bezier(.3,1.4,.5,1) both; }
+  @media (min-width: 860px) { .results.show { grid-template-columns: 1.35fr 1fr; } }
+
+  #map {
+    height: 420px; border-radius: 22px; overflow: hidden;
+    border: 1px solid var(--glass-edge); background: rgba(255,255,255,.04);
+    box-shadow: 0 14px 40px rgba(0,0,0,.35);
+  }
+
+  .list { display: grid; gap: .6rem; align-content: start; max-height: 420px; overflow-y: auto; padding: .2rem .4rem .2rem .1rem; scrollbar-width: thin; scrollbar-color: var(--a) transparent; }
+  .place {
+    position: relative; display: grid; grid-template-columns: auto 1fr; gap: .2rem .8rem; align-items: center;
+    padding: .8rem .9rem; border-radius: 18px; cursor: pointer; text-align: left; color: inherit; font: inherit; width: 100%;
+    background: rgba(255,255,255,.05); border: 1px solid var(--glass-edge);
+    transition: transform .25s cubic-bezier(.3,1.5,.5,1), background .3s, border-color .3s, box-shadow .3s;
+  }
+  .place:hover { transform: translateX(4px); background: rgba(255,255,255,.1); }
+  .place.active { border-color: transparent; background: linear-gradient(120deg, hsl(var(--h) 90% 55% / .35), hsl(calc(var(--h) + 60) 90% 55% / .3)); box-shadow: 0 10px 30px hsl(var(--h) 95% 50% / .35); }
+  .num {
+    grid-row: span 3; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 600; font-size: .9rem; color: #0a0820; background: linear-gradient(135deg, var(--a), var(--b));
+  }
+  .place h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+  .meta { font-size: .82rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .2rem .7rem; }
+  .place .row { display: flex; gap: .5rem; align-items: center; margin-top: .25rem; flex-wrap: wrap; }
+  .mini {
+    font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; text-decoration: none;
+    padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--glass-edge);
+    color: var(--ink); background: rgba(255,255,255,.08); transition: background .2s, transform .2s;
+  }
+  .mini:hover { background: rgba(255,255,255,.2); transform: translateY(-1px); }
+  .mini.primary { background: linear-gradient(120deg, #7dffc4, #6ee7ff); color: #0a0820; border-color: transparent; }
+  .route-info { font-size: .82rem; color: #7dffc4; font-weight: 500; }
+
+  .you { width: 18px; height: 18px; border-radius: 50%; background: #6ee7ff; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(110,231,255,.7); animation: beacon 2s infinite; }
+  @keyframes beacon { to { box-shadow: 0 0 0 22px rgba(110,231,255,0); } }
+  .pin {
+    width: 32px; height: 32px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg);
+    display: grid; place-items: center; background: linear-gradient(135deg, var(--a), var(--b));
+    border: 2px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.5); transition: transform .25s cubic-bezier(.3,1.7,.5,1);
+  }
+  .pin span { transform: rotate(45deg); font: 600 .8rem "Outfit", sans-serif; color: #0a0820; }
+  .pin.active { transform: rotate(-45deg) scale(1.35); }
+  .gm-style .gm-style-iw-c { color: #0a0820; border-radius: 14px; }
+
+  :focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <div class="blob one"></div><div class="blob two"></div><div class="blob three"></div>
+  </div>
+  <div class="grid-floor" aria-hidden="true"></div>
+
+  <main class="card" id="card">
+    <h1>Restaurant Finder</h1>
+    <p class="lede">Pick what you’re craving, share your location, and see the closest spots on a live map right here.</p>
+
+    <div class="chips" role="group" aria-label="Choose a cuisine">
+      <button class="chip" aria-pressed="true"  data-q="fast food restaurants" data-h="265">🍟 Fast food</button>
+      <button class="chip" aria-pressed="false" data-q="burgers"              data-h="22">🍔 Burgers</button>
+      <button class="chip" aria-pressed="false" data-q="pizza"                data-h="345">🍕 Pizza</button>
+      <button class="chip" aria-pressed="false" data-q="sushi"                data-h="185">🍣 Sushi</button>
+      <button class="chip" aria-pressed="false" data-q="tacos"                data-h="95">🌮 Tacos</button>
+      <button class="chip" aria-pressed="false" data-q="coffee shops"         data-h="40">☕ Coffee</button>
+    </div>
+
+    <div class="stage" id="stage" data-state="idle">
+      <div class="radar" aria-hidden="true"><div class="ring"></div><div class="ring"></div><div class="ring"></div></div>
+      <button class="go" id="go" data-label="Find food near me" aria-label="Detect my location and search"></button>
+    </div>
+
+    <p id="status" role="status" aria-live="polite"></p>
+    <div id="coords-wrap"></div>
+
+    <div id="results" class="results">
+      <div id="map" role="region" aria-label="Map of nearby restaurants"></div>
+      <div id="list" class="list" aria-label="Nearby restaurants"></div>
+    </div>
+  </main>
+
+  <script>
+    // 1) Paste your Google Maps Platform key here (enable: Maps JavaScript API, Places API (New), Directions API)
+    const GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY';
+
+    const card = document.getElementById('card');
+    const stage = document.getElementById('stage');
+    const go = document.getElementById('go');
+    const status = document.getElementById('status');
+    const coordsWrap = document.getElementById('coords-wrap');
+    const resultsEl = document.getElementById('results');
+    const listEl = document.getElementById('list');
+    const chips = [...document.querySelectorAll('.chip')];
+
+    let query = 'fast food restaurants';
+    let pos = null, map, youMarker, infoWindow, directionsRenderer, directionsService;
+    let markers = [], items = [], activeIdx = -1, searchToken = 0;
+    let libs = {};
+
+    const setStatus = (t, kind = '') => { status.textContent = t; status.className = kind; };
+
+    /* ---------- Load Google Maps on demand ---------- */
+    let mapsPromise;
+    function loadMaps() {
+      if (mapsPromise) return mapsPromise;
+      mapsPromise = new Promise((resolve, reject) => {
+        if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY') {
+          return reject(new Error('Add your Google Maps API key at the top of the script to show the map.'));
+        }
+        window.gm_authFailure = () => setStatus('Google rejected the API key. Check that the key is valid and the APIs are enabled.', 'err');
+        window.__mapsReady = async () => {
+          try {
+            const [m, p, mk, r] = await Promise.all([
+              google.maps.importLibrary('maps'), google.maps.importLibrary('places'),
+              google.maps.importLibrary('marker'), google.maps.importLibrary('routes')
+            ]);
+            libs = { maps: m, places: p, marker: mk, routes: r };
+            resolve();
+          } catch (e) { reject(e); }
+        };
+        const s = document.createElement('script');
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&v=weekly&loading=async&callback=__mapsReady`;
+        s.async = true;
+        s.onerror = () => reject(new Error('Could not load Google Maps. Check your connection.'));
+        document.head.appendChild(s);
+      });
+      mapsPromise.catch(() => { mapsPromise = null; });
+      return mapsPromise;
+    }
+
+    function initMap() {
+      if (map) return;
+      map = new libs.maps.Map(document.getElementById('map'), {
+        center: pos, zoom: 15, mapId: 'DEMO_MAP_ID', colorScheme: 'DARK',
+        disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy'
+      });
+      infoWindow = new libs.maps.InfoWindow();
+      directionsService = new libs.routes.DirectionsService();
+      directionsRenderer = new libs.routes.DirectionsRenderer({
+        map, suppressMarkers: true,
+        polylineOptions: { strokeColor: '#6ee7ff', strokeWeight: 6, strokeOpacity: .95 }
+      });
+      const dot = document.createElement('div'); dot.className = 'you';
+      youMarker = new libs.marker.AdvancedMarkerElement({ map, position: pos, content: dot, title: 'You are here', zIndex: 1 });
+    }
+
+    /* ---------- Helpers ---------- */
+    function distanceM(a, b) {
+      const R = 6371000, rad = x => x * Math.PI / 180;
+      const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+    const fmtDist = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+    /* ---------- Search ---------- */
+    async function runSearch() {
+      if (!pos) return;
+      const token = ++searchToken;
+      setStatus(`Searching for ${query}…`);
+      clearResults();
+      try {
+        await loadMaps();
+        initMap();
+        const { Place } = libs.places;
+        const { places } = await Place.searchByText({
+          textQuery: query,
+          fields: ['id', 'displayName', 'location', 'rating', 'userRatingCount', 'formattedAddress', 'googleMapsURI'],
+          locationBias: { center: pos, radius: 3000 },
+          maxResultCount: 12
+        });
+        if (token !== searchToken) return;
+        if (!places || !places.length) { setStatus('No places found nearby. Try another category.', 'err'); return; }
+
+        items = places.map(p => ({
+          name: p.displayName, loc: { lat: p.location.lat(), lng: p.location.lng() },
+          rating: p.rating, count: p.userRatingCount, address: p.formattedAddress, url: p.googleMapsURI
+        })).map(i => ({ ...i, dist: distanceM(pos, i.loc) })).sort((a, b) => a.dist - b.dist);
+
+        renderResults();
+        setStatus(`${items.length} places near you`, 'ok');
+      } catch (e) {
+        setStatus(e.message || 'Search failed. Make sure Places API (New) is enabled for your key.', 'err');
+      }
+    }
+
+    function clearResults() {
+      markers.forEach(m => m.map = null); markers = []; items = []; activeIdx = -1;
+      listEl.replaceChildren();
+      if (directionsRenderer) directionsRenderer.set('directions', null);
+      if (infoWindow) infoWindow.close();
+    }
+
+    function renderResults() {
+      const bounds = new libs.maps.LatLngBounds(); bounds.extend(pos);
+      items.forEach((it, i) => {
+        // marker
+        const pin = el('div', 'pin'); pin.appendChild(el('span', '', String(i + 1)));
+        const mk = new libs.marker.AdvancedMarkerElement({ map, position: it.loc, content: pin, title: it.name });
+        mk.addListener('click', () => select(i, true));
+        markers.push(mk); bounds.extend(it.loc);
+
+        // list row
+        const row = el('div', 'place'); row.tabIndex = 0; row.setAttribute('role', 'button');
+        row.appendChild(el('div', 'num', String(i + 1)));
+        row.appendChild(el('h3', '', it.name));
+        const meta = el('div', 'meta');
+        meta.appendChild(el('span', '', fmtDist(it.dist)));
+        if (it.rating) meta.appendChild(el('span', '', `★ ${it.rating.toFixed(1)}${it.count ? ` (${it.count})` : ''}`));
+        row.appendChild(meta);
+        const actions = el('div', 'row');
+        const dir = el('button', 'mini primary', 'Show route'); dir.type = 'button';
+        dir.addEventListener('click', e => { e.stopPropagation(); showRoute(i, row); });
+        actions.appendChild(dir);
+        if (it.url) { const a = el('a', 'mini', 'Google Maps page'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.addEventListener('click', e => e.stopPropagation()); actions.appendChild(a); }
+        actions.appendChild(el('span', 'route-info', ''));
+        row.appendChild(actions);
+        row.addEventListener('click', () => select(i, true));
+        row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(i, true); } });
+        listEl.appendChild(row);
+      });
+      map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
+    }
+
+    function select(i, pan) {
+      if (activeIdx >= 0) {
+        markers[activeIdx].content.classList.remove('active'); markers[activeIdx].zIndex = null;
+        listEl.children[activeIdx].classList.remove('active');
+      }
+      activeIdx = i;
+      markers[i].content.classList.add('active'); markers[i].zIndex = 10;
+      const row = listEl.children[i]; row.classList.add('active');
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (pan) map.panTo(items[i].loc);
+      const box = el('div'); box.style.color = '#0a0820';
+      box.appendChild(el('strong', '', items[i].name)); box.appendChild(el('div', '', items[i].address || ''));
+      infoWindow.setContent(box); infoWindow.open({ map, anchor: markers[i] });
+    }
+
+    async function showRoute(i, row) {
+      select(i, false);
+      const info = row.querySelector('.route-info'); info.textContent = 'Routing…';
+      const mode = items[i].dist < 1500 ? 'WALKING' : 'DRIVING';
+      try {
+        const res = await directionsService.route({ origin: pos, destination: items[i].loc, travelMode: mode });
+        directionsRenderer.setDirections(res);
+        const leg = res.routes[0].legs[0];
+        info.textContent = `${mode === 'WALKING' ? '🚶' : '🚗'} ${leg.duration.text} · ${leg.distance.text}`;
+      } catch (e) {
+        info.textContent = 'Route unavailable (enable Directions API)';
+      }
+    }
+
+    /* ---------- Location ---------- */
+    function findRestaurants() {
+      if (!navigator.geolocation) { setStatus('Geolocation isn’t supported in this browser.', 'err'); return; }
+      stage.dataset.state = 'scanning'; go.disabled = true; go.dataset.label = 'Scanning…';
+      setStatus('Locating your position…');
+      navigator.geolocation.getCurrentPosition(async p => {
+        pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+        stage.dataset.state = 'found'; stage.classList.add('compact');
+        go.dataset.label = '↻'; go.setAttribute('aria-label', 'Search again'); go.disabled = false;
+        coordsWrap.innerHTML = `<div class="coords"><span>Lat ${pos.lat.toFixed(4)}</span><span>Lon ${pos.lng.toFixed(4)}</span></div>`;
+        card.classList.add('wide'); resultsEl.classList.add('show');
+        if (map) { map.setCenter(pos); youMarker.position = pos; }
+        await runSearch();
+      }, () => {
+        stage.dataset.state = 'idle'; go.disabled = false; go.dataset.label = 'Try again';
+        setStatus('Couldn’t get your location. Allow location access in your browser, then try again.', 'err');
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+    }
+    go.addEventListener('click', findRestaurants);
+
+    /* ---------- Chips, glow ---------- */
+    chips.forEach(chip => chip.addEventListener('click', () => {
+      chips.forEach(c => c.setAttribute('aria-pressed', 'false'));
+      chip.setAttribute('aria-pressed', 'true');
+      query = chip.dataset.q;
+      document.documentElement.style.setProperty('--h', chip.dataset.h);
+      if (pos) runSearch();
+    }));
+
+    card.addEventListener('pointermove', e => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      card.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    });
+  </script>
+</body>
+</html>
